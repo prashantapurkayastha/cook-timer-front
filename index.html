@@ -312,13 +312,14 @@
 
   .done-sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 28px; }
 
-  /* Flash animation */
+  /* Flash animation — infinite until dismissed */
   @keyframes flash-bg {
-    0%, 100% { background: var(--bg); }
-    50% { background: var(--flash); }
+    0%   { background: var(--bg); }
+    50%  { background: #ffcc00; }
+    100% { background: var(--bg); }
   }
 
-  body.flashing { animation: flash-bg 0.5s ease 4; }
+  body.flashing { animation: flash-bg 0.8s ease-in-out infinite; }
 
   /* Error */
   .error-msg {
@@ -394,7 +395,7 @@
 
 <script>
   // ⚠️ Replace this with your Railway URL after deploying
-  const API_BASE = "https://cook-timer-backend-production.up.railway.app";
+  const API_BASE = "https://your-railway-app.up.railway.app";
 
   let stages = [];
   let currentStage = 0;
@@ -495,9 +496,9 @@
 
     if (secondsLeft <= 0) {
       clearInterval(timerInterval);
-      beep();
 
       if (currentStage < stages.length - 1) {
+        beepShort();
         currentStage++;
         setTimeout(() => startStage(currentStage), 800);
       } else {
@@ -520,41 +521,119 @@
     document.getElementById("pause-btn").textContent = paused ? "Resume" : "Pause";
   }
 
+  // Persistent alert state
+  let alertAudioCtx = null;
+  let alertOscillator = null;
+  let alertGain = null;
+  let flashInterval = null;
+
   function finishCooking() {
-    beep(true);
-    flashScreen();
     stages.forEach((_, i) => document.getElementById(`stage-${i}`).className = "stage-item done");
     show("done-section");
+    startPersistentAlert();
   }
 
-  function flashScreen() {
+  function startPersistentAlert() {
+    startPersistentBeep();
+    startPersistentFlash();
+  }
+
+  function stopPersistentAlert() {
+    // Stop beep
+    try {
+      if (alertGain) {
+        alertGain.gain.setTargetAtTime(0, alertAudioCtx.currentTime, 0.05);
+      }
+      if (alertOscillator) {
+        alertOscillator.stop(alertAudioCtx.currentTime + 0.1);
+      }
+    } catch(e) {}
+    alertOscillator = null;
+    alertGain = null;
+    alertAudioCtx = null;
+
+    // Stop flash
     document.body.classList.remove("flashing");
-    void document.body.offsetWidth;
-    document.body.classList.add("flashing");
-    setTimeout(() => document.body.classList.remove("flashing"), 2200);
   }
 
-  function beep(loud = false) {
+  function startPersistentBeep() {
+    try {
+      alertAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+      // iOS-style: repeating pattern via gain envelope on a continuous oscillator
+      alertOscillator = alertAudioCtx.createOscillator();
+      alertGain = alertAudioCtx.createGain();
+      alertOscillator.connect(alertGain);
+      alertGain.connect(alertAudioCtx.destination);
+
+      // Two tones slightly detuned for richness, like iOS alarm
+      const osc2 = alertAudioCtx.createOscillator();
+      const gain2 = alertAudioCtx.createGain();
+      osc2.connect(gain2);
+      gain2.connect(alertAudioCtx.destination);
+
+      alertOscillator.type = "sine";
+      alertOscillator.frequency.value = 880;
+      osc2.type = "sine";
+      osc2.frequency.value = 1108; // major third above
+
+      alertGain.gain.value = 0;
+      gain2.gain.value = 0;
+
+      // Schedule repeating beep pattern: on 0.6s, off 0.3s, repeat
+      const beepOn = 0.6;
+      const beepOff = 0.3;
+      const cycle = beepOn + beepOff;
+      const maxDuration = 300; // stop oscillator after 5 minutes regardless
+
+      for (let i = 0; i < Math.ceil(maxDuration / cycle); i++) {
+        const t = alertAudioCtx.currentTime + i * cycle;
+        // Ramp up
+        alertGain.gain.setValueAtTime(0, t);
+        alertGain.gain.linearRampToValueAtTime(0.7, t + 0.02);
+        gain2.gain.setValueAtTime(0, t);
+        gain2.gain.linearRampToValueAtTime(0.5, t + 0.02);
+        // Ramp down
+        alertGain.gain.setValueAtTime(0.7, t + beepOn - 0.03);
+        alertGain.gain.linearRampToValueAtTime(0, t + beepOn);
+        gain2.gain.setValueAtTime(0.5, t + beepOn - 0.03);
+        gain2.gain.linearRampToValueAtTime(0, t + beepOn);
+      }
+
+      alertOscillator.start();
+      alertOscillator.stop(alertAudioCtx.currentTime + maxDuration);
+      osc2.start();
+      osc2.stop(alertAudioCtx.currentTime + maxDuration);
+    } catch(e) {}
+  }
+
+  function startPersistentFlash() {
+    // CSS animation handles the repeating flash; just add class
+    document.body.classList.remove("flashing");
+    void document.body.offsetWidth; // force reflow to restart animation
+    document.body.classList.add("flashing");
+  }
+
+  // Stage-transition beep (short, quiet)
+  function beepShort() {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const times = loud ? [0, 0.35, 0.7] : [0];
-      times.forEach(t => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.type = "sine";
-        osc.frequency.value = loud ? 880 : 660;
-        gain.gain.setValueAtTime(0.4, ctx.currentTime + t);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.4);
-        osc.start(ctx.currentTime + t);
-        osc.stop(ctx.currentTime + t + 0.45);
-      });
-    } catch (e) {}
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.value = 660;
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.45);
+    } catch(e) {}
   }
 
   function resetAll() {
     if (timerInterval) clearInterval(timerInterval);
+    stopPersistentAlert();
     paused = false;
     document.getElementById("dish-input").value = "";
     document.getElementById("error-msg").style.display = "none";

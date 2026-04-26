@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cook Timer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #faf9f6;
+    --surface: #ffffff;
+    --text: #1a1a18;
+    --muted: #8a8a80;
+    --accent: #d4622a;
+    --accent-light: #f5e6dc;
+    --border: #e8e6e0;
+    --active: #2a7d4f;
+    --active-light: #dff0e8;
+    --flash: #fff3cd;
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 48px 20px 80px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+
+  .logo-icon {
+    font-size: 2.4rem;
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 2rem;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+
+  .tagline {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-top: 4px;
+    font-weight: 300;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 32px;
+    width: 100%;
+    max-width: 480px;
+    box-shadow: 0 2px 24px rgba(0,0,0,0.05);
+  }
+
+  /* INPUT STATE */
+  #input-section { display: block; }
+
+  .input-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+    display: block;
+  }
+
+  .input-row {
+    display: flex;
+    gap: 10px;
+  }
+
+  #dish-input {
+    flex: 1;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.95rem;
+    color: var(--text);
+    background: var(--bg);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  #dish-input:focus { border-color: var(--accent); }
+  #dish-input::placeholder { color: var(--muted); }
+
+  #go-btn {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 14px 20px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    white-space: nowrap;
+  }
+
+  #go-btn:hover { opacity: 0.88; }
+  #go-btn:active { transform: scale(0.97); }
+  #go-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .examples {
+    margin-top: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .example-chip {
+    background: var(--accent-light);
+    color: var(--accent);
+    border: none;
+    border-radius: 20px;
+    padding: 6px 12px;
+    font-size: 0.78rem;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .example-chip:hover { opacity: 0.75; }
+
+  /* LOADING */
+  #loading-section { display: none; text-align: center; padding: 20px 0; }
+
+  .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text {
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+
+  /* TIMER STATE */
+  #timer-section { display: none; }
+
+  .dish-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  .dish-emoji {
+    font-size: 2.2rem;
+    line-height: 1;
+  }
+
+  .dish-name {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.4rem;
+    line-height: 1.2;
+  }
+
+  .dish-total {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* Big clock */
+  .clock-wrap {
+    text-align: center;
+    margin: 8px 0 28px;
+  }
+
+  .clock {
+    font-family: 'DM Serif Display', serif;
+    font-size: 4.5rem;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    color: var(--text);
+    transition: color 0.3s;
+  }
+
+  .clock.urgent { color: var(--accent); }
+
+  .stage-label-big {
+    font-size: 0.8rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 8px;
+  }
+
+  /* Stage list */
+  .stages {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 28px;
+  }
+
+  .stage-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    border: 1.5px solid var(--border);
+    background: var(--bg);
+    transition: all 0.3s;
+  }
+
+  .stage-item.active {
+    border-color: var(--active);
+    background: var(--active-light);
+  }
+
+  .stage-item.done {
+    opacity: 0.45;
+  }
+
+  .stage-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--border);
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+
+  .stage-item.active .stage-dot { background: var(--active); }
+  .stage-item.done .stage-dot { background: var(--muted); }
+
+  .stage-info { flex: 1; }
+
+  .stage-name {
+    font-size: 0.88rem;
+    font-weight: 500;
+  }
+
+  .stage-tip {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .stage-mins {
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-weight: 300;
+  }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    gap: 10px;
+  }
+
+  .btn {
+    flex: 1;
+    border-radius: 12px;
+    padding: 14px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1.5px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    transition: all 0.2s;
+  }
+
+  .btn:hover { background: var(--border); }
+
+  .btn-primary {
+    background: var(--text);
+    color: white;
+    border-color: var(--text);
+  }
+
+  .btn-primary:hover { opacity: 0.85; background: var(--text); }
+
+  /* DONE STATE */
+  #done-section { display: none; text-align: center; padding: 16px 0; }
+
+  .done-emoji { font-size: 3.5rem; margin-bottom: 16px; display: block; }
+
+  .done-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.8rem;
+    margin-bottom: 8px;
+  }
+
+  .done-sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 28px; }
+
+  /* Flash animation */
+  @keyframes flash-bg {
+    0%, 100% { background: var(--bg); }
+    50% { background: var(--flash); }
+  }
+
+  body.flashing { animation: flash-bg 0.5s ease 4; }
+
+  /* Error */
+  .error-msg {
+    color: var(--accent);
+    font-size: 0.82rem;
+    margin-top: 10px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo-icon">🍳</span>
+  <h1>Cook Timer</h1>
+  <p class="tagline">Tell me what you're cooking. I'll handle the timing.</p>
+</header>
+
+<div class="card">
+  <!-- INPUT -->
+  <div id="input-section">
+    <span class="input-label">What are you cooking?</span>
+    <div class="input-row">
+      <input id="dish-input" type="text" placeholder="e.g. 2 chicken breasts, pan-fried" autocomplete="off" />
+      <button id="go-btn" onclick="startCooking()">Start →</button>
+    </div>
+    <p class="error-msg" id="error-msg">Something went wrong. Please try again.</p>
+    <div class="examples">
+      <button class="example-chip" onclick="fillExample(this)">🍝 Spaghetti bolognese</button>
+      <button class="example-chip" onclick="fillExample(this)">🍳 2 eggs, scrambled</button>
+      <button class="example-chip" onclick="fillExample(this)">🍗 Grilled chicken breast</button>
+      <button class="example-chip" onclick="fillExample(this)">🍚 Basmati rice, 2 cups</button>
+    </div>
+  </div>
+
+  <!-- LOADING -->
+  <div id="loading-section">
+    <div class="spinner"></div>
+    <p class="loading-text">Thinking about your dish…</p>
+  </div>
+
+  <!-- TIMER -->
+  <div id="timer-section">
+    <div class="dish-header">
+      <span class="dish-emoji" id="dish-emoji">🍳</span>
+      <div>
+        <div class="dish-name" id="dish-name">–</div>
+        <div class="dish-total" id="dish-total">– min total</div>
+      </div>
+    </div>
+
+    <div class="clock-wrap">
+      <div class="clock" id="clock">00:00</div>
+      <div class="stage-label-big" id="stage-label-big">–</div>
+    </div>
+
+    <div class="stages" id="stages-list"></div>
+
+    <div class="controls">
+      <button class="btn" onclick="resetAll()">New dish</button>
+      <button class="btn btn-primary" id="pause-btn" onclick="togglePause()">Pause</button>
+    </div>
+  </div>
+
+  <!-- DONE -->
+  <div id="done-section">
+    <span class="done-emoji" id="done-emoji">🍽️</span>
+    <div class="done-title" id="done-title">Ready to eat!</div>
+    <p class="done-sub" id="done-sub">Your dish is done.</p>
+    <button class="btn btn-primary" onclick="resetAll()" style="width:100%">Cook something else</button>
+  </div>
+</div>
+
+<script>
+  // ⚠️ Replace this with your Railway URL after deploying
+  const API_BASE = "https://cook-timer-backend-production.up.railway.app";
+
+  let stages = [];
+  let currentStage = 0;
+  let secondsLeft = 0;
+  let timerInterval = null;
+  let paused = false;
+  let dishData = null;
+
+  function show(id) {
+    ["input-section","loading-section","timer-section","done-section"]
+      .forEach(s => document.getElementById(s).style.display = s === id ? "block" : "none");
+  }
+
+  function fillExample(btn) {
+    const text = btn.textContent.replace(/^[\u{1F000}-\u{1FFFF}\u{2600}-\u{27FF}]\s*/u, "").trim();
+    document.getElementById("dish-input").value = text;
+  }
+
+  async function startCooking() {
+    const dish = document.getElementById("dish-input").value.trim();
+    if (!dish) return;
+
+    document.getElementById("error-msg").style.display = "none";
+    document.getElementById("go-btn").disabled = true;
+    show("loading-section");
+
+    try {
+      const res = await fetch(`${API_BASE}/cook`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dish })
+      });
+
+      if (!res.ok) throw new Error("API error");
+      dishData = await res.json();
+      launchTimer(dishData);
+    } catch (e) {
+      show("input-section");
+      document.getElementById("error-msg").style.display = "block";
+    } finally {
+      document.getElementById("go-btn").disabled = false;
+    }
+  }
+
+  function launchTimer(data) {
+    stages = data.stages;
+    currentStage = 0;
+
+    document.getElementById("dish-emoji").textContent = data.emoji || "🍳";
+    document.getElementById("dish-name").textContent = data.dish;
+    document.getElementById("dish-total").textContent = `${data.totalMinutes} min total`;
+    document.getElementById("done-emoji").textContent = data.emoji || "🍽️";
+    document.getElementById("done-title").textContent = `${data.dish} is ready!`;
+    document.getElementById("done-sub").textContent = `Total cook time: ${data.totalMinutes} minutes`;
+
+    renderStageList();
+    show("timer-section");
+    startStage(0);
+  }
+
+  function renderStageList() {
+    const list = document.getElementById("stages-list");
+    list.innerHTML = stages.map((s, i) => `
+      <div class="stage-item" id="stage-${i}">
+        <div class="stage-dot"></div>
+        <div class="stage-info">
+          <div class="stage-name">${s.name}</div>
+          ${s.tip ? `<div class="stage-tip">${s.tip}</div>` : ""}
+        </div>
+        <div class="stage-mins">${s.minutes}m</div>
+      </div>
+    `).join("");
+  }
+
+  function startStage(index) {
+    if (timerInterval) clearInterval(timerInterval);
+    paused = false;
+    document.getElementById("pause-btn").textContent = "Pause";
+
+    // Update active state
+    stages.forEach((_, i) => {
+      const el = document.getElementById(`stage-${i}`);
+      el.className = "stage-item" + (i < index ? " done" : i === index ? " active" : "");
+    });
+
+    const s = stages[index];
+    secondsLeft = s.minutes * 60;
+    document.getElementById("stage-label-big").textContent = s.name;
+    updateClock();
+
+    timerInterval = setInterval(tick, 1000);
+  }
+
+  function tick() {
+    if (paused) return;
+    secondsLeft--;
+    updateClock();
+
+    if (secondsLeft <= 0) {
+      clearInterval(timerInterval);
+      beep();
+
+      if (currentStage < stages.length - 1) {
+        currentStage++;
+        setTimeout(() => startStage(currentStage), 800);
+      } else {
+        finishCooking();
+      }
+    }
+  }
+
+  function updateClock() {
+    const m = Math.floor(secondsLeft / 60);
+    const s = secondsLeft % 60;
+    const str = `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+    const clock = document.getElementById("clock");
+    clock.textContent = str;
+    clock.className = "clock" + (secondsLeft <= 60 && secondsLeft > 0 ? " urgent" : "");
+  }
+
+  function togglePause() {
+    paused = !paused;
+    document.getElementById("pause-btn").textContent = paused ? "Resume" : "Pause";
+  }
+
+  function finishCooking() {
+    beep(true);
+    flashScreen();
+    stages.forEach((_, i) => document.getElementById(`stage-${i}`).className = "stage-item done");
+    show("done-section");
+  }
+
+  function flashScreen() {
+    document.body.classList.remove("flashing");
+    void document.body.offsetWidth;
+    document.body.classList.add("flashing");
+    setTimeout(() => document.body.classList.remove("flashing"), 2200);
+  }
+
+  function beep(loud = false) {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const times = loud ? [0, 0.35, 0.7] : [0];
+      times.forEach(t => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = "sine";
+        osc.frequency.value = loud ? 880 : 660;
+        gain.gain.setValueAtTime(0.4, ctx.currentTime + t);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.4);
+        osc.start(ctx.currentTime + t);
+        osc.stop(ctx.currentTime + t + 0.45);
+      });
+    } catch (e) {}
+  }
+
+  function resetAll() {
+    if (timerInterval) clearInterval(timerInterval);
+    paused = false;
+    document.getElementById("dish-input").value = "";
+    document.getElementById("error-msg").style.display = "none";
+    show("input-section");
+  }
+
+  // Allow Enter key
+  document.getElementById("dish-input").addEventListener("keydown", e => {
+    if (e.key === "Enter") startCooking();
+  });
+</script>
+</body>
+</html>

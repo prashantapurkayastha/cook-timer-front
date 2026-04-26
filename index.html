@@ -395,7 +395,7 @@
 
 <script>
   // ⚠️ Replace this with your Railway URL after deploying
-  const API_BASE = "https://cook-timer-backend-production.up.railway.app"
+  const API_BASE = "https://your-railway-app.up.railway.app";
 
   let stages = [];
   let currentStage = 0;
@@ -523,9 +523,8 @@
 
   // Persistent alert state
   let alertAudioCtx = null;
-  let alertOscillator = null;
-  let alertGain = null;
-  let flashInterval = null;
+  let alertOscillators = []; // track ALL oscillators so we can stop them all
+  let alertGains = [];
 
   function finishCooking() {
     stages.forEach((_, i) => document.getElementById(`stage-${i}`).className = "stage-item done");
@@ -539,18 +538,15 @@
   }
 
   function stopPersistentAlert() {
-    // Stop beep
+    // Close the entire AudioContext — kills every node instantly
     try {
-      if (alertGain) {
-        alertGain.gain.setTargetAtTime(0, alertAudioCtx.currentTime, 0.05);
-      }
-      if (alertOscillator) {
-        alertOscillator.stop(alertAudioCtx.currentTime + 0.1);
+      if (alertAudioCtx) {
+        alertAudioCtx.close();
       }
     } catch(e) {}
-    alertOscillator = null;
-    alertGain = null;
     alertAudioCtx = null;
+    alertOscillators = [];
+    alertGains = [];
 
     // Stop flash
     document.body.classList.remove("flashing");
@@ -560,48 +556,49 @@
     try {
       alertAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-      // iOS-style: repeating pattern via gain envelope on a continuous oscillator
-      alertOscillator = alertAudioCtx.createOscillator();
-      alertGain = alertAudioCtx.createGain();
-      alertOscillator.connect(alertGain);
-      alertGain.connect(alertAudioCtx.destination);
+      const osc1 = alertAudioCtx.createOscillator();
+      const gain1 = alertAudioCtx.createGain();
+      osc1.connect(gain1);
+      gain1.connect(alertAudioCtx.destination);
 
-      // Two tones slightly detuned for richness, like iOS alarm
       const osc2 = alertAudioCtx.createOscillator();
       const gain2 = alertAudioCtx.createGain();
       osc2.connect(gain2);
       gain2.connect(alertAudioCtx.destination);
 
-      alertOscillator.type = "sine";
-      alertOscillator.frequency.value = 880;
-      osc2.type = "sine";
-      osc2.frequency.value = 1108; // major third above
+      // Track both so stopPersistentAlert knows about them
+      alertOscillators = [osc1, osc2];
+      alertGains = [gain1, gain2];
 
-      alertGain.gain.value = 0;
+      osc1.type = "sine";
+      osc1.frequency.value = 880;
+      osc2.type = "sine";
+      osc2.frequency.value = 1108; // major third — iOS-style dual tone
+
+      gain1.gain.value = 0;
       gain2.gain.value = 0;
 
-      // Schedule repeating beep pattern: on 0.6s, off 0.3s, repeat
+      // Schedule repeating beep pattern: on 0.6s, off 0.3s
       const beepOn = 0.6;
       const beepOff = 0.3;
       const cycle = beepOn + beepOff;
-      const maxDuration = 300; // stop oscillator after 5 minutes regardless
+      const maxDuration = 300; // auto-stop after 5 min as a safety net
 
       for (let i = 0; i < Math.ceil(maxDuration / cycle); i++) {
         const t = alertAudioCtx.currentTime + i * cycle;
-        // Ramp up
-        alertGain.gain.setValueAtTime(0, t);
-        alertGain.gain.linearRampToValueAtTime(0.7, t + 0.02);
+        gain1.gain.setValueAtTime(0, t);
+        gain1.gain.linearRampToValueAtTime(0.7, t + 0.02);
         gain2.gain.setValueAtTime(0, t);
         gain2.gain.linearRampToValueAtTime(0.5, t + 0.02);
-        // Ramp down
-        alertGain.gain.setValueAtTime(0.7, t + beepOn - 0.03);
-        alertGain.gain.linearRampToValueAtTime(0, t + beepOn);
+
+        gain1.gain.setValueAtTime(0.7, t + beepOn - 0.03);
+        gain1.gain.linearRampToValueAtTime(0, t + beepOn);
         gain2.gain.setValueAtTime(0.5, t + beepOn - 0.03);
         gain2.gain.linearRampToValueAtTime(0, t + beepOn);
       }
 
-      alertOscillator.start();
-      alertOscillator.stop(alertAudioCtx.currentTime + maxDuration);
+      osc1.start();
+      osc1.stop(alertAudioCtx.currentTime + maxDuration);
       osc2.start();
       osc2.stop(alertAudioCtx.currentTime + maxDuration);
     } catch(e) {}
